@@ -31,6 +31,7 @@ RosPospacBridge::RosPospacBridge(const rclcpp::NodeOptions & node_options)
     bool enable_pose_array = this->declare_parameter<bool>("publishers.pose_array.enable", true);
     bool enable_twist_with_cov = this->declare_parameter<bool>("publishers.twist_with_covariance_stamped.enable", true);
     bool enable_pose = this->declare_parameter<bool>("publishers.pose_stamped.enable", true);
+    bool enable_tf = this->declare_parameter<bool>("publishers.tf.enable", true);
 
     std::string nav_sat_fix_topic_name = this->declare_parameter<std::string>("publishers.nav_sat_fix.topic", "");
     std::string imu_topic_name = this->declare_parameter<std::string>("publishers.imu.topic", "");
@@ -48,7 +49,7 @@ RosPospacBridge::RosPospacBridge(const rclcpp::NodeOptions & node_options)
         imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(imu_topic_name, 10);
     }
     if (enable_pose_with_cov) {
-        pose_with_cov_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(pose_array_topic_name, 10);
+        pose_with_cov_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(pose_with_cov_topic_name, 10);
     }
     if (enable_pose_array) {
         pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(pose_array_topic_name, 10);
@@ -58,6 +59,10 @@ RosPospacBridge::RosPospacBridge(const rclcpp::NodeOptions & node_options)
     }
     if (enable_pose) {
         pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(pose_topic_name, 10);
+    }
+    if (enable_tf) {
+        tf_br_ = std::make_shared<tf2_ros::TransformBroadcaster>(
+        std::shared_ptr<rclcpp::Node>(this, [](auto) {}));
     }
 
     // Declare other parameters
@@ -163,6 +168,17 @@ void RosPospacBridge::publishGpsData()
             if (twist_pub_) {
                 publish_twist_msg(east_velocity, north_velocity, up_velocity,
                                     x_angular_rate, y_angular_rate, z_angular_rate, sensor_time);
+            }
+            if (tf_br_) {
+                geometry_msgs::msg::TransformStamped transform_stamped;
+                transform_stamped.header.stamp = sensor_time;
+                transform_stamped.header.frame_id = "map";
+                transform_stamped.child_frame_id = "gnss_ins";
+                transform_stamped.transform.translation.x = pose_with_cov_msg.pose.pose.position.x;
+                transform_stamped.transform.translation.y = pose_with_cov_msg.pose.pose.position.y;
+                transform_stamped.transform.translation.z = pose_with_cov_msg.pose.pose.position.z;
+                transform_stamped.transform.rotation = pose_with_cov_msg.pose.pose.orientation;
+                tf_br_->sendTransform(transform_stamped);
             }
         }
 

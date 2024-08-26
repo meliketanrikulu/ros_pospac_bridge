@@ -9,6 +9,7 @@
 #include "geometry_msgs/msg/twist_with_covariance_stamped.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"  // Include PoseStamped message
 #include <Eigen/Geometry>
+#include <tf2_ros/transform_broadcaster.h>
 namespace ros_pospac_bridge {
 class RosPospacBridge : public rclcpp::Node {
 
@@ -89,6 +90,8 @@ private:
                                        double roll_sd, double pitch_sd, double heading_sd);
   void publish_twist_msg(double east_velocity, double north_velocity, double up_velocity,
                            double x_angular_rate, double y_angular_rate, double z_angular_rate, rclcpp::Time sensor_time);
+
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_br_;
 };
 }  // namespace ros_pospac_bridge
 #endif  // ROS_POSPAC_BRIDGE_ROS_POSPAC_BRIDGE_HPP_

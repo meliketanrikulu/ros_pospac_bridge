@@ -21,6 +21,8 @@
       pose_stamped:
         enable: true
         topic: "/ros_pospac_bridge/pose_stamped"
+      tf:
+        enable: true
 
     lidar_to_gnss_transform:
       x: 0.0
