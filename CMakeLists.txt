@@ -19,12 +19,14 @@ find_package(GeographicLib REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
 
 ament_auto_find_build_dependencies()
-
+ament_auto_add_library(${PROJECT_NAME} SHARED
+        src/ros_pospac_bridge.cpp
+)
 # Include directories (for header files, if any)
 include_directories(include)
 
 # Add the executable
-add_executable(ros_pospac_bridge src/ros_pospac_bridge.cpp)
+#add_executable(ros_pospac_bridge src/ros_pospac_bridge.cpp)
 
 # Link dependencies
 ament_target_dependencies(ros_pospac_bridge 
@@ -59,6 +61,10 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+rclcpp_components_register_node(${PROJECT_NAME}
+        PLUGIN "ros_pospac_bridge::RosPospacBridge"
+        EXECUTABLE ${PROJECT_NAME}_node
+)
 ament_auto_package(INSTALL_TO_SHARE
         launch
         config
