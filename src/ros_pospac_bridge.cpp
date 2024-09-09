@@ -33,31 +33,29 @@ RosPospacBridge::RosPospacBridge(const rclcpp::NodeOptions & node_options)
     bool enable_pose = this->declare_parameter<bool>("publishers.pose_stamped.enable", true);
     bool enable_tf = this->declare_parameter<bool>("publishers.tf.enable", true);
 
-    std::string nav_sat_fix_topic_name = this->declare_parameter<std::string>("publishers.nav_sat_fix.topic", "");
-    std::string imu_topic_name = this->declare_parameter<std::string>("publishers.imu.topic", "");
-    std::string pose_with_cov_topic_name = this->declare_parameter<std::string>("publishers.pose_with_covariance_stamped.topic", "");
-    std::string pose_array_topic_name = this->declare_parameter<std::string>("publishers.pose_array.topic", "");
-    std::string twist_with_cov_topic_name = this->declare_parameter<std::string>("publishers.twist_with_covariance_stamped.topic", "");
-    std::string pose_topic_name = this->declare_parameter<std::string>("publishers.pose_stamped.topic", "");
-
-
     // Initialize publishers based on parameters
     if (enable_nav_sat_fix) {
+        std::string nav_sat_fix_topic_name = this->declare_parameter<std::string>("publishers.nav_sat_fix.topic", "");
         gps_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>(nav_sat_fix_topic_name, 10);
     }
     if (enable_imu) {
+        std::string imu_topic_name = this->declare_parameter<std::string>("publishers.imu.topic", "");
         imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>(imu_topic_name, 10);
     }
     if (enable_pose_with_cov) {
+        std::string pose_with_cov_topic_name = this->declare_parameter<std::string>("publishers.pose_with_covariance_stamped.topic", "");
         pose_with_cov_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(pose_with_cov_topic_name, 10);
     }
     if (enable_pose_array) {
+        std::string pose_array_topic_name = this->declare_parameter<std::string>("publishers.pose_array.topic", "");
         pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(pose_array_topic_name, 10);
     }
     if (enable_twist_with_cov) {
+        std::string twist_with_cov_topic_name = this->declare_parameter<std::string>("publishers.twist_with_covariance_stamped.topic", "");
         twist_pub_ = this->create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>(twist_with_cov_topic_name, 10);
     }
     if (enable_pose) {
+        std::string pose_topic_name = this->declare_parameter<std::string>("publishers.pose_stamped.topic", "");
         pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(pose_topic_name, 10);
     }
     if (enable_tf) {
@@ -65,21 +63,10 @@ RosPospacBridge::RosPospacBridge(const rclcpp::NodeOptions & node_options)
         std::shared_ptr<rclcpp::Node>(this, [](auto) {}));
     }
 
-    // Declare other parameters
-    file_path_ = this->declare_parameter<std::string>("gps_data_file", "/home/javadibrahimli/ros2_ws/route2.txt");
 
-    lidar_to_gnss_transform_.x = this->declare_parameter<double>("lidar_to_gnss_transform.x", 0.0);
-    lidar_to_gnss_transform_.y = this->declare_parameter<double>("lidar_to_gnss_transform.y", 0.0);
-    lidar_to_gnss_transform_.z = this->declare_parameter<double>("lidar_to_gnss_transform.z", 0.0);
-    lidar_to_gnss_transform_.roll = this->declare_parameter<double>("lidar_to_gnss_transform.roll", 0.0);
-    lidar_to_gnss_transform_.pitch = this->declare_parameter<double>("lidar_to_gnss_transform.pitch", 0.0);
-    lidar_to_gnss_transform_.yaw = this->declare_parameter<double>("lidar_to_gnss_transform.yaw", 0.0);
-    lidar_to_base_link_transform_.x = this->declare_parameter<double>("lidar_to_base_link_transform.x", 0.0);
-    lidar_to_base_link_transform_.y = this->declare_parameter<double>("lidar_to_base_link_transform.y", 0.0);
-    lidar_to_base_link_transform_.z = this->declare_parameter<double>("lidar_to_base_link_transform.z", 0.0);
-    lidar_to_base_link_transform_.roll = this->declare_parameter<double>("lidar_to_base_link_transform.roll", 0.0);
-    lidar_to_base_link_transform_.pitch = this->declare_parameter<double>("lidar_to_base_link_transform.pitch", 0.0);
-    lidar_to_base_link_transform_.yaw = this->declare_parameter<double>("lidar_to_base_link_transform.yaw", 0.0);
+    lidar_to_gnss_transform_ = declare_transform_parameters(this, "calibration.lidar_to_gnss");
+    base_link_to_lidar_transform_ = declare_transform_parameters(this, "calibration.base_link_to_lidar");
+    gnss_to_base_link_transform_ = declare_transform_parameters(this, "calibration.gnss_to_base_link");
 
 
     // Start publishing data
@@ -88,6 +75,9 @@ RosPospacBridge::RosPospacBridge(const rclcpp::NodeOptions & node_options)
 
 void RosPospacBridge::publishGpsData()
 {
+    // Declare other parameters
+    file_path_ = this->declare_parameter<std::string>("gps_data_file", "");
+
     std::ifstream file(file_path_);
     if (!file.is_open()) {
         RCLCPP_ERROR(this->get_logger(), "Failed to open file: %s", file_path_.c_str());
@@ -114,11 +104,7 @@ void RosPospacBridge::publishGpsData()
 
             rclcpp::Time sensor_time(static_cast<uint64_t>((time + 1723766400) * 1e9), RCL_ROS_TIME);
 
-            // Convert latitude and longitude to UTM
-            int zone;
-            bool northp;
-            double utm_easting, utm_northing;
-            GeographicLib::UTMUPS::Forward(latitude, longitude, zone, northp, utm_easting, utm_northing);
+
 
             // Create and publish GPS Fix message
             if (gps_pub_) {
@@ -127,30 +113,32 @@ void RosPospacBridge::publishGpsData()
                 gps_pub_->publish(gps_msg);  // Publish GPS Fix message
             }
 
-            // Create PoseWithCovarianceStamped from GPS data
-            auto pose_with_cov_msg = create_pose_with_cov_msg(easting, northing, ellipsoid_height, roll, pitch, heading,
-                                              east_sd, north_sd, height_sd, roll_sd, pitch_sd, heading_sd, sensor_time);
+
+
+            ///////////////////////////////////////////////
+            ///
+            geometry_msgs::msg::Pose pose_msg = create_pose_msg(easting, northing, ortho_height, roll, pitch, heading);
+            geometry_msgs::msg::Pose pose_msg_in_base_link = transform_pose_to_base_link(pose_msg);
+
+            // geometry_msgs::msg::Pose pose_msg_in_base_link = pose_msg;
+
+            if (pose_pub_) {
+                geometry_msgs::msg::PoseStamped pose_stamped_msg = create_pose_stamped_msg(pose_msg_in_base_link, sensor_time);
+                pose_pub_->publish(pose_stamped_msg);
+            }
 
             // Publish the final pose in the base_link frame
             if (pose_with_cov_pub_) {
+                geometry_msgs::msg::PoseWithCovarianceStamped pose_with_cov_msg = create_pose_with_cov_msg(pose_msg_in_base_link, east_sd, north_sd, height_sd, roll_sd, pitch_sd, heading_sd, sensor_time);
                 pose_with_cov_pub_->publish(pose_with_cov_msg);
             }
-
-            // Convert PoseWithCovarianceStamped to PoseStamped and publish
-            if (pose_pub_) {
-                auto pose_msg = create_pose_msg(pose_with_cov_msg);
-                pose_pub_->publish(pose_msg);
-            }
-
 
             // Create and publish a PoseArray message
             if (pose_array_pub_) {
                 // Add the pose to the list of all poses
-                auto pose_msg = create_pose_msg(pose_with_cov_msg);
-                all_poses_.push_back(pose_msg.pose);
-
+                all_poses_.push_back(pose_msg_in_base_link);
                 geometry_msgs::msg::PoseArray pose_array_msg;
-                pose_array_msg.header.stamp = pose_with_cov_msg.header.stamp;
+                pose_array_msg.header.stamp = sensor_time;
                 pose_array_msg.header.frame_id = "map";
                 pose_array_msg.poses = all_poses_;
                 pose_array_pub_->publish(pose_array_msg);
@@ -166,18 +154,19 @@ void RosPospacBridge::publishGpsData()
 
             // Publish Twist data
             if (twist_pub_) {
-                publish_twist_msg(east_velocity, north_velocity, up_velocity,
-                                    x_angular_rate, y_angular_rate, z_angular_rate, sensor_time);
+                geometry_msgs::msg::TwistWithCovarianceStamped twist_with_covariance_stamped_msg =  create_twist_msg(east_velocity, north_velocity, up_velocity,
+                                                                                                                        x_angular_rate, y_angular_rate, z_angular_rate, sensor_time);
+                twist_pub_->publish(twist_with_covariance_stamped_msg);
             }
             if (tf_br_) {
                 geometry_msgs::msg::TransformStamped transform_stamped;
                 transform_stamped.header.stamp = sensor_time;
                 transform_stamped.header.frame_id = "map";
                 transform_stamped.child_frame_id = "gnss_ins";
-                transform_stamped.transform.translation.x = pose_with_cov_msg.pose.pose.position.x;
-                transform_stamped.transform.translation.y = pose_with_cov_msg.pose.pose.position.y;
-                transform_stamped.transform.translation.z = pose_with_cov_msg.pose.pose.position.z;
-                transform_stamped.transform.rotation = pose_with_cov_msg.pose.pose.orientation;
+                transform_stamped.transform.translation.x = pose_msg_in_base_link.position.x;
+                transform_stamped.transform.translation.y = pose_msg_in_base_link.position.y;
+                transform_stamped.transform.translation.z = pose_msg_in_base_link.position.z;
+                transform_stamped.transform.rotation = pose_msg_in_base_link.orientation;
                 tf_br_->sendTransform(transform_stamped);
             }
         }
@@ -187,6 +176,61 @@ void RosPospacBridge::publishGpsData()
     file.close();
 }
 
+geometry_msgs::msg::Pose RosPospacBridge::transform_pose_to_base_link(geometry_msgs::msg::Pose& gnss_pose){
+
+    std::cout<<"gnss_pose x :"<<gnss_pose.position.x<<std::endl;
+    std::cout<<"gnss_pose y :"<<gnss_pose.position.y<<std::endl;
+    std::cout<<"gnss_pose z :"<<gnss_pose.position.z<<std::endl;
+    std::cout<<"gnss_pose ori_x :"<<gnss_pose.orientation.x<<std::endl;
+    std::cout<<"gnss_pose ori_y :"<<gnss_pose.orientation.y<<std::endl;
+    std::cout<<"gnss_pose ori_z :"<<gnss_pose.orientation.z<<std::endl;
+    std::cout<<"gnss_pose ori_w :"<<gnss_pose.orientation.w<<std::endl;
+
+    tf2::Transform tf_map2gnss_transform{};
+    tf2::fromMsg(gnss_pose, tf_map2gnss_transform);
+
+    tf2::Transform tf_map2base_link{};
+    tf_map2base_link = tf_map2gnss_transform * gnss_to_base_link_transform_;
+
+    geometry_msgs::msg::Pose pose_in_base_link;
+    tf2::toMsg(tf_map2base_link, pose_in_base_link);
+
+
+    std::cout<<"pose_in_base_link x :"<<pose_in_base_link.position.x<<std::endl;
+    std::cout<<"pose_in_base_link y :"<<pose_in_base_link.position.y<<std::endl;
+    std::cout<<"pose_in_base_link z :"<<pose_in_base_link.position.z<<std::endl;
+    std::cout<<"pose_in_base_link ori_x :"<<pose_in_base_link.orientation.x<<std::endl;
+    std::cout<<"pose_in_base_link ori_y :"<<pose_in_base_link.orientation.y<<std::endl;
+    std::cout<<"pose_in_base_link ori_z :"<<pose_in_base_link.orientation.z<<std::endl;
+    std::cout<<"pose_in_base_link ori_w :"<<pose_in_base_link.orientation.w<<std::endl;
+
+    return pose_in_base_link;
+}
+
+tf2::Transform RosPospacBridge::declare_transform_parameters(rclcpp::Node* node, const std::string& prefix) {
+
+
+    double x = node->declare_parameter<double>(prefix + ".x", 0.0);
+    double y = node->declare_parameter<double>(prefix + ".y", 0.0);
+    double z = node->declare_parameter<double>(prefix + ".z", 0.0);
+    double roll = node->declare_parameter<double>(prefix + ".roll", 0.0);
+    double pitch = node->declare_parameter<double>(prefix + ".pitch", 0.0);
+    double yaw = node->declare_parameter<double>(prefix + ".yaw", 0.0);
+    // Pozisyon vektörünü oluştur
+    tf2::Vector3 origin(x, y, z);
+
+    // Euler açılarını (roll, pitch, yaw) kullanarak bir quaternion oluştur
+    tf2::Quaternion rotation;
+    rotation.setRPY(roll, pitch, yaw);
+
+    // Transform objesini oluştur ve yukarıdaki vektör ve quaternion ile initialize et
+    tf2::Transform transform;
+    transform.setOrigin(origin);
+    transform.setRotation(rotation);
+
+
+    return transform;
+}
 Eigen::Quaterniond RosPospacBridge::getQuaternionFromRPY(double roll, double pitch, double yaw)
 {
     double roll_in_rad = roll * M_PI / 180.0;
@@ -226,12 +270,8 @@ sensor_msgs::msg::NavSatFix RosPospacBridge::create_nav_sat_fix_msg(double latit
 
     return gps_msg;
 }
-
-geometry_msgs::msg::PoseWithCovarianceStamped RosPospacBridge::create_pose_with_cov_msg(double easting, double northing, double altitude,
-                                                                double roll, double pitch, double yaw,
-                                                                double east_sd, double north_sd, double height_sd,
-                                                                double roll_sd, double pitch_sd, double yaw_sd, rclcpp::Time sensor_time_)
-{
+geometry_msgs::msg::Pose RosPospacBridge::create_pose_msg(double easting, double northing, double altitude,
+                                                            double roll, double pitch, double yaw) {
     // convert global UTM to MGRS
     GNSSStat gnss_stat_utm;
 
@@ -252,20 +292,41 @@ geometry_msgs::msg::PoseWithCovarianceStamped RosPospacBridge::create_pose_with_
     gnss_stat_mgrs = convertUTM2MGRS(gnss_stat_utm,MGRSPrecision::_100MICRO_METER,logger);
 
     // create posewithcov msg
-    geometry_msgs::msg::PoseWithCovarianceStamped pose_with_cov_msg;
-    pose_with_cov_msg.header.stamp  = sensor_time_;
-    pose_with_cov_msg.header.frame_id = "map";
+    geometry_msgs::msg::Pose pose_msg;
+
     // Set position
-    pose_with_cov_msg.pose.pose.position.x = gnss_stat_mgrs.x;
-    pose_with_cov_msg.pose.pose.position.y = gnss_stat_mgrs.y;
-    pose_with_cov_msg.pose.pose.position.z = altitude;
+    pose_msg.position.x = gnss_stat_mgrs.x;
+    pose_msg.position.y = gnss_stat_mgrs.y;
+    pose_msg.position.z = altitude;
 
     // Convert from Euler angles (assuming they are in degrees) to quaternion
     Eigen::Quaterniond q = getQuaternionFromRPY(roll, pitch, yaw);
-    pose_with_cov_msg.pose.pose.orientation.x = q.x();
-    pose_with_cov_msg.pose.pose.orientation.y = q.y();
-    pose_with_cov_msg.pose.pose.orientation.z = q.z();
-    pose_with_cov_msg.pose.pose.orientation.w = q.w();
+    pose_msg.orientation.x = q.x();
+    pose_msg.orientation.y = q.y();
+    pose_msg.orientation.z = q.z();
+    pose_msg.orientation.w = q.w();
+
+    return pose_msg;
+
+}
+
+geometry_msgs::msg::PoseStamped RosPospacBridge::create_pose_stamped_msg(geometry_msgs::msg::Pose pose, rclcpp::Time timestamp) {
+
+    geometry_msgs::msg::PoseStamped pose_stamped_msg;
+    pose_stamped_msg.header.stamp = timestamp;
+    pose_stamped_msg.header.frame_id = "map";
+    pose_stamped_msg.pose = pose;
+    return pose_stamped_msg;
+}
+
+geometry_msgs::msg::PoseWithCovarianceStamped RosPospacBridge::create_pose_with_cov_msg(geometry_msgs::msg::Pose pose,
+                                                                double east_sd, double north_sd, double height_sd,
+                                                                double roll_sd, double pitch_sd, double yaw_sd, rclcpp::Time sensor_time_)
+{
+    geometry_msgs::msg::PoseWithCovarianceStamped pose_with_cov_msg;
+    pose_with_cov_msg.header.stamp = sensor_time_;
+    pose_with_cov_msg.header.frame_id = "map";
+    pose_with_cov_msg.pose.pose = pose;
 
     // Set covariance (using the variances calculated from the standard deviations)
     pose_with_cov_msg.pose.covariance[0] = east_sd * east_sd;    // Variance in X (easting)
@@ -317,7 +378,7 @@ sensor_msgs::msg::Imu RosPospacBridge::create_imu_msg(rclcpp::Time timestamp, do
     return imu_msg;
 }
 
-void RosPospacBridge::publish_twist_msg(double east_velocity, double north_velocity, double up_velocity,
+geometry_msgs::msg::TwistWithCovarianceStamped RosPospacBridge::create_twist_msg(double east_velocity, double north_velocity, double up_velocity,
                                           double x_angular_rate, double y_angular_rate, double z_angular_rate, rclcpp::Time sensor_time) {
     geometry_msgs::msg::TwistWithCovarianceStamped twist_with_cov_stamped_msg;
 
@@ -338,16 +399,9 @@ void RosPospacBridge::publish_twist_msg(double east_velocity, double north_veloc
     twist_with_cov_stamped_msg.twist.covariance[7] = 1.0;  // Variance in Y (north velocity)
     twist_with_cov_stamped_msg.twist.covariance[14] = 1.0;  // Variance in Z (up velocity)
 
-    // Publish the Twist message
-    twist_pub_->publish(twist_with_cov_stamped_msg);
+    return twist_with_cov_stamped_msg;
 }
 
-geometry_msgs::msg::PoseStamped RosPospacBridge::create_pose_msg(const geometry_msgs::msg::PoseWithCovarianceStamped& pose_with_covariance) {
-    geometry_msgs::msg::PoseStamped pose_stamped_msg;
-    pose_stamped_msg.header = pose_with_covariance.header;
-    pose_stamped_msg.pose = pose_with_covariance.pose.pose;
-    return pose_stamped_msg;
-}
 
 RosPospacBridge::GNSSStat RosPospacBridge::convertUTM2MGRS(RosPospacBridge::GNSSStat gnss_stat_utm, const RosPospacBridge::MGRSPrecision precision, const rclcpp::Logger &logger){
 

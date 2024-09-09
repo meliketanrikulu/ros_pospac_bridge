@@ -13,7 +13,7 @@
         enable: true
         topic: "/ros_pospac_bridge/pose_with_covariance"
       pose_array:
-        enable: true
+        enable: false
         topic: "/ros_pospac_bridge/pose_array"
       twist_with_covariance_stamped:
         enable: true
@@ -24,17 +24,27 @@
       tf:
         enable: true
 
-    lidar_to_gnss_transform:
-      x: 0.0
-      y: 0.0
-      z: -0.08
-      roll: 0.007237
-      pitch: -0.0072323
-      yaw: 3.1334945
-    lidar_to_base_link_transform:
-      x: 0.96
-      y: -0.01
-      z: 1.1
-      roll: 0.0
-      pitch: 0.0
-      yaw: -3.0965926
+    calibration:
+      lidar_to_gnss:
+        x: 0.0
+        y: 0.0
+        z: -0.08
+        roll: 0.007237
+        pitch: -0.0072323
+        yaw: 3.1334945
+
+      base_link_to_lidar:
+        x: 0.99
+        y: -0.035
+        z: 1.31
+        roll: 0.0
+        pitch: 0.0
+        yaw: -3.1095926
+
+      gnss_to_base_link:
+        x: -0.998
+        y: 0.050
+        z: -1.223
+        roll: -0.007
+        pitch: 0.007
+        yaw: -0.024

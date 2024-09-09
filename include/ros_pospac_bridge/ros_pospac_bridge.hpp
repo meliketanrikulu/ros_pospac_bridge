@@ -10,6 +10,10 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"  // Include PoseStamped message
 #include <Eigen/Geometry>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2/LinearMath/Transform.h>
+
+#include <tf2/transform_datatypes.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 namespace ros_pospac_bridge {
 class RosPospacBridge : public rclcpp::Node {
 
@@ -32,10 +36,21 @@ private:
 
   std::vector<geometry_msgs::msg::Pose> all_poses_;  // To accumulate all poses
 
-  struct Transform {
-    double x, y, z, roll, pitch, yaw;
-  } lidar_to_gnss_transform_, lidar_to_base_link_transform_;
+  // struct Transform {
+  //   double x;
+  //   double y;
+  //   double z;
+  //   double roll;
+  //   double pitch;
+  //   double yaw;
+  // } lidar_to_gnss_transform_, lidar_to_base_link_transform_;
 
+  tf2::Transform  lidar_to_gnss_transform_ ;
+  tf2::Transform  base_link_to_lidar_transform_;
+  tf2::Transform  gnss_to_base_link_transform_;
+
+tf2::Transform declare_transform_parameters(rclcpp::Node* node, const std::string& prefix);
+  geometry_msgs::msg::Pose transformPoseManually(const geometry_msgs::msg::Pose& pose, const tf2::Transform& transform) ;
   enum class MGRSPrecision {
     _1_METER = 5,
     _100MICRO_METER = 9,
@@ -78,20 +93,26 @@ private:
   void publishGpsData();
   sensor_msgs::msg::NavSatFix create_nav_sat_fix_msg(double latitude, double longitude, double ellipsoid_height,
                                                double east_sd, double north_sd, double height_sd, rclcpp::Time timestamp);
-  geometry_msgs::msg::PoseWithCovarianceStamped create_pose_with_cov_msg(double easting, double northing, double altitude,
-                                                                double roll, double pitch, double yaw,
+  geometry_msgs::msg::PoseWithCovarianceStamped create_pose_with_cov_msg(geometry_msgs::msg::Pose pose,
                                                                 double east_sd, double north_sd, double height_sd,
                                                                 double roll_sd, double pitch_sd, double yaw_sd, rclcpp::Time timestamp);
-  geometry_msgs::msg::PoseStamped create_pose_msg(const geometry_msgs::msg::PoseWithCovarianceStamped& pose_with_covariance);
+  geometry_msgs::msg::Pose create_pose_msg(double easting, double northing, double altitude,
+                                                              double roll, double pitch, double yaw);
+
+  geometry_msgs::msg::PoseStamped create_pose_stamped_msg(geometry_msgs::msg::Pose pose, rclcpp::Time timestamp);
+
   Eigen::Quaterniond getQuaternionFromRPY(double roll, double pitch, double yaw);
   sensor_msgs::msg::Imu create_imu_msg(rclcpp::Time timestamp, double x_angular_rate, double y_angular_rate,
                                        double z_angular_rate, double x_acceleration, double y_acceleration,
                                        double z_acceleration, double roll, double pitch, double yaw,
                                        double roll_sd, double pitch_sd, double heading_sd);
-  void publish_twist_msg(double east_velocity, double north_velocity, double up_velocity,
+  geometry_msgs::msg::TwistWithCovarianceStamped create_twist_msg(double east_velocity, double north_velocity, double up_velocity,
                            double x_angular_rate, double y_angular_rate, double z_angular_rate, rclcpp::Time sensor_time);
 
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_br_;
+
+  geometry_msgs::msg::Pose transform_pose_to_base_link(geometry_msgs::msg::Pose& pose);
+
 };
 }  // namespace ros_pospac_bridge
 #endif  // ROS_POSPAC_BRIDGE_ROS_POSPAC_BRIDGE_HPP_
